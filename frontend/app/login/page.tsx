@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 
 async function login(email: string, password: string) {
-  const res = await fetch("http://localhost:6000/auth/login", {
+  const res = await fetch("http://localhost:5000/auth/login", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },

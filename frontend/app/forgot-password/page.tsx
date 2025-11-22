@@ -2,8 +2,10 @@
 
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -14,8 +16,9 @@ export default function ForgotPasswordPage() {
     setMessage(null);
 
     try {
-      const response = await fetch("http://localhost:3001/api/auth/forgot-password", {
+      const response = await fetch("http://localhost:5000/auth/forgot-password", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -25,8 +28,11 @@ export default function ForgotPasswordPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage({ type: "success", text: data.message || "Reset code sent! Check your email." });
-        setEmail("");
+        setMessage({ type: "success", text: data.message || "Reset code sent! Redirecting..." });
+        // Redirect to reset password page after 1.5 seconds
+        setTimeout(() => {
+          router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+        }, 1500);
       } else {
         setMessage({ type: "error", text: data.error || "Failed to send reset code" });
       }
@@ -78,8 +84,8 @@ export default function ForgotPasswordPage() {
             {message && (
               <div
                 className={`p-4 rounded-lg ${message.type === "success"
-                    ? "bg-green-50 text-green-800 border border-green-200"
-                    : "bg-red-50 text-red-800 border border-red-200"
+                  ? "bg-green-50 text-green-800 border border-green-200"
+                  : "bg-red-50 text-red-800 border border-red-200"
                   }`}
               >
                 {message.text}

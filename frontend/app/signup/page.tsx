@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 
 async function signup(name: string, email: string, password: string) {
-  const res = await fetch("http://localhost:6000/auth/register", {
+  const res = await fetch("http://localhost:5000/auth/register", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },

@@ -1,8 +1,8 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import pool from "../db";
-import { signToken } from "../utils/jwt";
-import { sendPasswordResetEmail } from "../utils/email";
+import pool from "../db.js";
+import { signToken } from "../utils/jwt.js";
+import { sendPasswordResetEmail } from "../utils/email.js";
 
 const router = express.Router();
 
@@ -104,6 +104,7 @@ router.post("/forgot-password", async (req, res) => {
     }
 
     try {
+        console.log("Forgot password requested for email:", email);
         const userResult = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
         if (userResult.rows.length === 0) {
             // Do not reveal if user exists

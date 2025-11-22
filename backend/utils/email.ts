@@ -1,13 +1,16 @@
 import nodemailer from "nodemailer";
 
-// Configure Gmail transporter
-const transporter = nodemailer.createTransport({
+// Check if email credentials are configured
+const isEmailConfigured = !!(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD);
+
+// Configure Gmail transporter only if credentials are available
+const transporter = isEmailConfigured ? nodemailer.createTransport({
     service: "gmail",
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
     },
-});
+}) : null;
 
 /**
  * Send password reset email with OTP
@@ -15,6 +18,13 @@ const transporter = nodemailer.createTransport({
  * @param otp - 6-digit OTP code
  */
 export async function sendPasswordResetEmail(email: string, otp: string): Promise<void> {
+    // Check if email is configured
+    if (!isEmailConfigured || !transporter) {
+        console.warn(`Email not configured. OTP for ${email}: ${otp}`);
+        console.warn("To enable email sending, set EMAIL_USER and EMAIL_PASSWORD in .env file");
+        return; // Don't throw error, just log the OTP
+    }
+
     const mailOptions = {
         from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
         to: email,
