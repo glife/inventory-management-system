@@ -1,10 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-
-import { useRouter } from 'next/navigation';
-import { Search, Bell, HelpCircle, Settings, User, Package, Warehouse, FileText, Activity, BarChart3, Box, Clock, List, LayoutGrid, Plus, Truck } from 'lucide-react';
-
+import { Search, Bell, HelpCircle, Settings, User, Package, Warehouse, FileText, Activity, BarChart3, Box, Clock, List, LayoutGrid, Plus, X, ArrowDown, ArrowUp, CheckCircle, Printer, AlertCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // Type Definitions
@@ -13,17 +10,20 @@ interface Product {
   productCode: string;
   productName: string;
   quantity: number;
+  inStock?: boolean; // For stock alerts
 }
 
-interface Receipt {
+interface Delivery {
   id: string;
   reference: string;
   from: string;
   to: string;
   contact: string;
   scheduleDate: string | null;
-  status: 'Ready' | 'Draft' | 'In Progress' | 'Done' | 'Cancelled';
+  status: 'Draft' | 'Waiting' | 'Ready' | 'Done';
   responsible?: string;
+  deliveryAddress?: string;
+  operationType?: string;
   products?: Product[];
 }
 
@@ -33,44 +33,109 @@ interface NavItem {
   label: string;
 }
 
-interface TopNavItem {
-  id: string;
-  label: string;
-}
-
-export default function ReceiptsPage() {
-  const router = useRouter();
-  const [activeNav, setActiveNav] = useState<string>('receipt');
-  const [activeTopNav, setActiveTopNav] = useState<string>('operations');
+export default function DeliveriesPage() {
+  const [activeNav, setActiveNav] = useState<string>('delivery');
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [searchQuery, setSearchQuery] = useState('');
-  const [draggedReceiptId, setDraggedReceiptId] = useState<string | null>(null);
+  const [draggedDeliveryId, setDraggedDeliveryId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
-  const [sortColumn, setSortColumn] = useState<keyof Receipt | null>(null);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<keyof Delivery | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [newProduct, setNewProduct] = useState({ productCode: '', productName: '', quantity: 1 });
 
-  // Form state for new receipt
-  const [newReceipt, setNewReceipt] = useState({
+  // Form state for new delivery
+  const [newDelivery, setNewDelivery] = useState({
     from: '',
     to: '',
     contact: '',
     scheduleDate: '',
-    status: 'Draft' as Receipt['status'],
+    status: 'Draft' as Delivery['status'],
+    deliveryAddress: '',
+    operationType: '',
   });
 
-  // Dummy data for receipts - using state so it can be updated
-  const [receiptsData, setReceiptsData] = useState<Receipt[]>([
-    { id: '1', reference: 'WH/IN/0001', from: 'vendor', to: 'WH/Stock1', contact: 'Azure Interior', scheduleDate: null, status: 'Ready', responsible: 'John Doe', products: [{ id: '1', productCode: 'DESK001', productName: 'Desk', quantity: 6 }] },
-    { id: '2', reference: 'WH/IN/0002', from: 'vendor', to: 'WH/Stock1', contact: 'Azure Interior', scheduleDate: null, status: 'Ready', responsible: 'Jane Smith', products: [] },
-    { id: '3', reference: 'WH/IN/0003', from: 'vendor', to: 'WH/Stock2', contact: 'Tech Solutions', scheduleDate: '2024-01-15', status: 'In Progress', responsible: 'Mike Johnson', products: [] },
-    { id: '4', reference: 'WH/IN/0004', from: 'vendor', to: 'WH/Stock1', contact: 'Global Supplies', scheduleDate: '2024-01-16', status: 'Draft', responsible: 'Sarah Lee', products: [] },
-    { id: '5', reference: 'WH/IN/0005', from: 'vendor', to: 'WH/Stock3', contact: 'Azure Interior', scheduleDate: '2024-01-17', status: 'Ready', responsible: 'Tom Wilson', products: [] },
-    { id: '6', reference: 'WH/IN/0006', from: 'vendor', to: 'WH/Stock2', contact: 'Tech Solutions', scheduleDate: null, status: 'Done', responsible: 'Emily Brown', products: [] },
-    { id: '7', reference: 'WH/IN/0007', from: 'vendor', to: 'WH/Stock1', contact: 'Global Supplies', scheduleDate: '2024-01-18', status: 'Ready', responsible: 'David Miller', products: [] },
-    { id: '8', reference: 'WH/IN/0008', from: 'vendor', to: 'WH/Stock3', contact: 'Azure Interior', scheduleDate: null, status: 'In Progress', responsible: 'Lisa Anderson', products: [] },
+  // Dummy data for deliveries
+  const [deliveriesData, setDeliveriesData] = useState<Delivery[]>([
+    { 
+      id: '1', 
+      reference: 'WH/OUT/0001', 
+      from: 'WH/Stock1', 
+      to: 'vendor', 
+      contact: 'Azure Interior', 
+      scheduleDate: null, 
+      status: 'Ready', 
+      responsible: 'John Doe',
+      deliveryAddress: '123 Main St, City, State',
+      operationType: 'Outbound',
+      products: [{ id: '1', productCode: 'DESK001', productName: 'Desk', quantity: 6, inStock: true }] 
+    },
+    { 
+      id: '2', 
+      reference: 'WH/OUT/0002', 
+      from: 'WH/Stock1', 
+      to: 'vendor', 
+      contact: 'Azure Interior', 
+      scheduleDate: null, 
+      status: 'Ready', 
+      responsible: 'Jane Smith',
+      deliveryAddress: '456 Oak Ave, City, State',
+      operationType: 'Outbound',
+      products: [] 
+    },
+    { 
+      id: '3', 
+      reference: 'WH/OUT/0003', 
+      from: 'WH/Stock2', 
+      to: 'customer', 
+      contact: 'Tech Solutions', 
+      scheduleDate: '2024-01-15', 
+      status: 'Waiting', 
+      responsible: 'Mike Johnson',
+      deliveryAddress: '789 Pine Rd, City, State',
+      operationType: 'Outbound',
+      products: [{ id: '2', productCode: 'CHAIR001', productName: 'Chair', quantity: 4, inStock: false }] 
+    },
+    { 
+      id: '4', 
+      reference: 'WH/OUT/0004', 
+      from: 'WH/Stock1', 
+      to: 'vendor', 
+      contact: 'Global Supplies', 
+      scheduleDate: '2024-01-16', 
+      status: 'Draft', 
+      responsible: 'Sarah Lee',
+      deliveryAddress: '321 Elm St, City, State',
+      operationType: 'Outbound',
+      products: [] 
+    },
+    { 
+      id: '5', 
+      reference: 'WH/OUT/0005', 
+      from: 'WH/Stock3', 
+      to: 'customer', 
+      contact: 'Azure Interior', 
+      scheduleDate: '2024-01-17', 
+      status: 'Ready', 
+      responsible: 'Tom Wilson',
+      deliveryAddress: '654 Maple Dr, City, State',
+      operationType: 'Outbound',
+      products: [] 
+    },
+    { 
+      id: '6', 
+      reference: 'WH/OUT/0006', 
+      from: 'WH/Stock2', 
+      to: 'vendor', 
+      contact: 'Tech Solutions', 
+      scheduleDate: null, 
+      status: 'Done', 
+      responsible: 'Emily Brown',
+      deliveryAddress: '987 Cedar Ln, City, State',
+      operationType: 'Outbound',
+      products: [] 
+    },
   ]);
 
   const navItems: NavItem[] = [
@@ -84,13 +149,13 @@ export default function ReceiptsPage() {
     { id: 'support', icon: HelpCircle, label: 'Support' },
   ];
 
-
-  const statusOptions: Receipt['status'][] = ['Ready', 'Draft', 'In Progress', 'Done', 'Cancelled'];
+  const statusOptions: Delivery['status'][] = ['Draft', 'Waiting', 'Ready', 'Done'];
+  const operationTypes = ['Outbound', 'Transfer', 'Return'];
 
   // Generate next reference number
   const generateNextReference = (): string => {
-    const maxRef = receiptsData.reduce((max, receipt) => {
-      const match = receipt.reference.match(/WH\/IN\/(\d+)/);
+    const maxRef = deliveriesData.reduce((max, delivery) => {
+      const match = delivery.reference.match(/WH\/OUT\/(\d+)/);
       if (match) {
         const num = parseInt(match[1], 10);
         return num > max ? num : max;
@@ -98,74 +163,65 @@ export default function ReceiptsPage() {
       return max;
     }, 0);
     const nextNum = (maxRef + 1).toString().padStart(4, '0');
-    return `WH/IN/${nextNum}`;
+    return `WH/OUT/${nextNum}`;
   };
 
-  // Get selected receipt
-  const selectedReceipt = receiptsData.find(r => r.id === selectedReceiptId);
+  // Get selected delivery
+  const selectedDelivery = deliveriesData.find(d => d.id === selectedDeliveryId);
 
-  // Handle adding new receipt
-  const handleAddReceipt = () => {
-    if (!newReceipt.from || !newReceipt.to || !newReceipt.contact) {
+  // Handle adding new delivery
+  const handleAddDelivery = () => {
+    if (!newDelivery.from || !newDelivery.to || !newDelivery.contact) {
       alert('Please fill in all required fields');
       return;
     }
 
-    const newReceiptData: Receipt = {
-      id: (receiptsData.length + 1).toString(),
+    const newDeliveryData: Delivery = {
+      id: (deliveriesData.length + 1).toString(),
       reference: generateNextReference(),
-      from: newReceipt.from,
-      to: newReceipt.to,
-      contact: newReceipt.contact,
-      scheduleDate: newReceipt.scheduleDate || null,
-      status: newReceipt.status,
-      responsible: 'Current User', // Auto-fill with logged in user
+      from: newDelivery.from,
+      to: newDelivery.to,
+      contact: newDelivery.contact,
+      scheduleDate: newDelivery.scheduleDate || null,
+      status: newDelivery.status,
+      responsible: 'Current User',
+      deliveryAddress: newDelivery.deliveryAddress || '',
+      operationType: newDelivery.operationType || 'Outbound',
       products: [],
     };
 
-    setReceiptsData([...receiptsData, newReceiptData]);
+    setDeliveriesData([...deliveriesData, newDeliveryData]);
     setIsModalOpen(false);
-    setNewReceipt({
+    setNewDelivery({
       from: '',
       to: '',
       contact: '',
       scheduleDate: '',
       status: 'Draft',
+      deliveryAddress: '',
+      operationType: '',
     });
   };
 
   // Handle workflow actions
-  const handleToDo = () => {
-    if (selectedReceiptId && selectedReceipt?.status === 'Draft') {
-      setReceiptsData(prevReceipts =>
-        prevReceipts.map(receipt =>
-          receipt.id === selectedReceiptId
-            ? { ...receipt, status: 'Ready' }
-            : receipt
-        )
-      );
-    }
-  };
-
   const handleValidate = () => {
-    if (selectedReceiptId && selectedReceipt?.status === 'Ready') {
-      setReceiptsData(prevReceipts =>
-        prevReceipts.map(receipt =>
-          receipt.id === selectedReceiptId
-            ? { ...receipt, status: 'Done' }
-            : receipt
+    if (selectedDeliveryId && selectedDelivery?.status === 'Ready') {
+      setDeliveriesData(prevDeliveries =>
+        prevDeliveries.map(delivery =>
+          delivery.id === selectedDeliveryId
+            ? { ...delivery, status: 'Done' }
+            : delivery
         )
       );
     }
   };
 
   const handlePrint = () => {
-    if (selectedReceipt) {
-      // Create a new window for printing
+    if (selectedDelivery) {
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
 
-      const totalQuantity = selectedReceipt.products?.reduce((sum, p) => sum + p.quantity, 0) || 0;
+      const totalQuantity = selectedDelivery.products?.reduce((sum, p) => sum + p.quantity, 0) || 0;
       const currentDate = new Date().toLocaleDateString('en-US', { 
         year: 'numeric', 
         month: 'long', 
@@ -176,7 +232,7 @@ export default function ReceiptsPage() {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Receipt - ${selectedReceipt.reference}</title>
+            <title>Delivery - ${selectedDelivery.reference}</title>
             <style>
               @media print {
                 @page {
@@ -208,13 +264,13 @@ export default function ReceiptsPage() {
                 font-weight: bold;
                 margin-bottom: 5px;
               }
-              .receipt-title {
+              .delivery-title {
                 font-size: 24px;
                 font-weight: bold;
                 margin: 20px 0;
                 text-align: center;
               }
-              .receipt-info {
+              .delivery-info {
                 display: flex;
                 justify-content: space-between;
                 margin-bottom: 30px;
@@ -307,19 +363,19 @@ export default function ReceiptsPage() {
           <body>
             <div class="header">
               <div class="company-name">Inventory Management System</div>
-              <div style="font-size: 12px; color: #666;">Warehouse Receipt Document</div>
+              <div style="font-size: 12px; color: #666;">Warehouse Delivery Document</div>
             </div>
 
-            <div class="receipt-title">RECEIPT</div>
+            <div class="delivery-title">DELIVERY</div>
 
-            <div class="receipt-info">
+            <div class="delivery-info">
               <div class="info-section">
-                <div class="info-label">Receipt Reference</div>
-                <div class="info-value" style="font-size: 18px; font-weight: bold;">${selectedReceipt.reference}</div>
+                <div class="info-label">Delivery Reference</div>
+                <div class="info-value" style="font-size: 18px; font-weight: bold;">${selectedDelivery.reference}</div>
                 
                 <div class="info-label">Status</div>
                 <div class="info-value">
-                  <span class="status-badge">${selectedReceipt.status}</span>
+                  <span class="status-badge">${selectedDelivery.status}</span>
                 </div>
                 
                 <div class="info-label">Date</div>
@@ -327,22 +383,27 @@ export default function ReceiptsPage() {
               </div>
               
               <div class="info-section">
-                <div class="info-label">Receive From</div>
-                <div class="info-value">${selectedReceipt.from}</div>
+                <div class="info-label">Deliver From</div>
+                <div class="info-value">${selectedDelivery.from}</div>
                 
-                <div class="info-label">Warehouse Location</div>
-                <div class="info-value">${selectedReceipt.to}</div>
+                <div class="info-label">Deliver To</div>
+                <div class="info-value">${selectedDelivery.to}</div>
                 
                 <div class="info-label">Contact</div>
-                <div class="info-value">${selectedReceipt.contact}</div>
+                <div class="info-value">${selectedDelivery.contact}</div>
                 
-                ${selectedReceipt.scheduleDate ? `
+                ${selectedDelivery.deliveryAddress ? `
+                <div class="info-label">Delivery Address</div>
+                <div class="info-value">${selectedDelivery.deliveryAddress}</div>
+                ` : ''}
+                
+                ${selectedDelivery.scheduleDate ? `
                 <div class="info-label">Schedule Date</div>
-                <div class="info-value">${new Date(selectedReceipt.scheduleDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div class="info-value">${new Date(selectedDelivery.scheduleDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
                 ` : ''}
                 
                 <div class="info-label">Responsible</div>
-                <div class="info-value">${selectedReceipt.responsible || 'Current User'}</div>
+                <div class="info-value">${selectedDelivery.responsible || 'Current User'}</div>
               </div>
             </div>
 
@@ -355,8 +416,8 @@ export default function ReceiptsPage() {
                 </tr>
               </thead>
               <tbody>
-                ${selectedReceipt.products && selectedReceipt.products.length > 0 ? 
-                  selectedReceipt.products.map(product => `
+                ${selectedDelivery.products && selectedDelivery.products.length > 0 ? 
+                  selectedDelivery.products.map(product => `
                     <tr>
                       <td>${product.productName}</td>
                       <td>${product.productCode}</td>
@@ -371,7 +432,7 @@ export default function ReceiptsPage() {
             <div class="total-section">
               <div class="total-row">
                 <span>Total Items:</span>
-                <span><strong>${selectedReceipt.products?.length || 0}</strong></span>
+                <span><strong>${selectedDelivery.products?.length || 0}</strong></span>
               </div>
               <div class="total-row">
                 <span>Total Quantity:</span>
@@ -384,12 +445,12 @@ export default function ReceiptsPage() {
                 <div class="signature-line">Prepared By</div>
               </div>
               <div class="signature">
-                <div class="signature-line">Received By</div>
+                <div class="signature-line">Delivered By</div>
               </div>
             </div>
 
             <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #999;">
-              This is a computer-generated receipt. No signature required.
+              This is a computer-generated delivery document. No signature required.
             </div>
           </body>
         </html>
@@ -397,35 +458,36 @@ export default function ReceiptsPage() {
 
       printWindow.document.close();
       
-      // Wait for content to load, then print
       setTimeout(() => {
         printWindow.focus();
         printWindow.print();
-        // Close window after printing (optional)
-        // printWindow.close();
       }, 250);
     }
   };
 
-  // Handle adding product to receipt
+  // Handle adding product to delivery
   const handleAddProduct = () => {
-    if (!selectedReceiptId || !newProduct.productCode || !newProduct.productName) {
+    if (!selectedDeliveryId || !newProduct.productCode || !newProduct.productName) {
       alert('Please fill in product code and name');
       return;
     }
+
+    // Check stock (mock check - in real app, this would check actual stock)
+    const inStock = Math.random() > 0.3; // 70% chance of being in stock
 
     const product: Product = {
       id: Date.now().toString(),
       productCode: newProduct.productCode,
       productName: newProduct.productName,
       quantity: newProduct.quantity,
+      inStock: inStock,
     };
 
-    setReceiptsData(prevReceipts =>
-      prevReceipts.map(receipt =>
-        receipt.id === selectedReceiptId
-          ? { ...receipt, products: [...(receipt.products || []), product] }
-          : receipt
+    setDeliveriesData(prevDeliveries =>
+      prevDeliveries.map(delivery =>
+        delivery.id === selectedDeliveryId
+          ? { ...delivery, products: [...(delivery.products || []), product] }
+          : delivery
       )
     );
 
@@ -433,25 +495,22 @@ export default function ReceiptsPage() {
   };
 
   // Handle column sorting
-  const handleSort = (column: keyof Receipt) => {
+  const handleSort = (column: keyof Delivery) => {
     if (sortColumn === column) {
-      // Toggle direction if clicking same column
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // Set new column and default to ascending
       setSortColumn(column);
       setSortDirection('asc');
     }
   };
 
-  // Filter and sort receipts
-  let filteredReceipts = receiptsData.filter(receipt => {
-    // Search filter
+  // Filter and sort deliveries
+  let filteredDeliveries = deliveriesData.filter(delivery => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const matchesSearch = 
-        receipt.reference.toLowerCase().includes(query) ||
-        receipt.contact.toLowerCase().includes(query);
+        delivery.reference.toLowerCase().includes(query) ||
+        delivery.contact.toLowerCase().includes(query);
       if (!matchesSearch) return false;
     }
     return true;
@@ -459,15 +518,13 @@ export default function ReceiptsPage() {
 
   // Apply sorting
   if (sortColumn) {
-    filteredReceipts = [...filteredReceipts].sort((a, b) => {
+    filteredDeliveries = [...filteredDeliveries].sort((a, b) => {
       let aValue = a[sortColumn];
       let bValue = b[sortColumn];
 
-      // Handle null values
       if (aValue === null || aValue === undefined) aValue = '';
       if (bValue === null || bValue === undefined) bValue = '';
 
-      // Convert to string for comparison
       const aStr = String(aValue).toLowerCase();
       const bStr = String(bValue).toLowerCase();
 
@@ -480,8 +537,8 @@ export default function ReceiptsPage() {
   }
 
   // Handle drag and drop
-  const handleDragStart = (e: React.DragEvent, receiptId: string) => {
-    setDraggedReceiptId(receiptId);
+  const handleDragStart = (e: React.DragEvent, deliveryId: string) => {
+    setDraggedDeliveryId(deliveryId);
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -490,27 +547,26 @@ export default function ReceiptsPage() {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, newStatus: Receipt['status']) => {
+  const handleDrop = (e: React.DragEvent, newStatus: Delivery['status']) => {
     e.preventDefault();
-    if (draggedReceiptId) {
-      setReceiptsData(prevReceipts =>
-        prevReceipts.map(receipt =>
-          receipt.id === draggedReceiptId
-            ? { ...receipt, status: newStatus }
-            : receipt
+    if (draggedDeliveryId) {
+      setDeliveriesData(prevDeliveries =>
+        prevDeliveries.map(delivery =>
+          delivery.id === draggedDeliveryId
+            ? { ...delivery, status: newStatus }
+            : delivery
         )
       );
-      setDraggedReceiptId(null);
+      setDraggedDeliveryId(null);
     }
   };
 
-  // Group receipts by status for Kanban view
+  // Group deliveries by status for Kanban view
   const groupedByStatus = {
-    'Ready': filteredReceipts.filter(r => r.status === 'Ready'),
-    'Draft': filteredReceipts.filter(r => r.status === 'Draft'),
-    'In Progress': filteredReceipts.filter(r => r.status === 'In Progress'),
-    'Done': filteredReceipts.filter(r => r.status === 'Done'),
-    'Cancelled': filteredReceipts.filter(r => r.status === 'Cancelled'),
+    'Draft': filteredDeliveries.filter(d => d.status === 'Draft'),
+    'Waiting': filteredDeliveries.filter(d => d.status === 'Waiting'),
+    'Ready': filteredDeliveries.filter(d => d.status === 'Ready'),
+    'Done': filteredDeliveries.filter(d => d.status === 'Done'),
   };
 
   const getStatusColor = (status: string) => {
@@ -519,12 +575,10 @@ export default function ReceiptsPage() {
         return 'bg-green-100 text-green-800 border-green-200';
       case 'Draft':
         return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'Waiting':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'Done':
         return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'Cancelled':
-        return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -542,43 +596,25 @@ export default function ReceiptsPage() {
             <span className="font-semibold text-gray-900">InventoryMS</span>
           </div>
         </div>
-
+        
         <nav className="flex-1 p-4 space-y-1">
-          <button
-            onClick={() => router.push('/receipts')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-blue-50 text-blue-600"
-          >
-            <Package className="w-5 h-5" />
-            Receipt Operations
-          </button>
-          <button
-            onClick={() => router.push('/delivery')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100"
-          >
-            <Truck className="w-5 h-5" />
-            Delivery Operations
-          </button>
-          <button
-            onClick={() => router.push('/stock')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100"
-          >
-            <Box className="w-5 h-5" />
-            Stock
-          </button>
-          <button
-            onClick={() => router.push('/history')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100"
-          >
-            <Clock className="w-5 h-5" />
-            Move History
-          </button>
-          <button
-            onClick={() => router.push('/settings')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100"
-          >
-            <Settings className="w-5 h-5" />
-            Settings
-          </button>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveNav(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  activeNav === item.id
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </aside>
 
@@ -607,9 +643,9 @@ export default function ReceiptsPage() {
           </div>
         </header>
 
-        {/* Receipts Content */}
+        {/* Deliveries Content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {/* Receipts Header */}
+          {/* Deliveries Header */}
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button 
@@ -619,9 +655,9 @@ export default function ReceiptsPage() {
                 <Plus className="w-4 h-4" />
                 NEW
               </button>
-              <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Delivery</h1>
             </div>
-
+            
             <div className="flex items-center gap-2">
               {/* Search Icon */}
               <div className="relative">
@@ -634,25 +670,27 @@ export default function ReceiptsPage() {
                   className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-100 text-gray-900"
                 />
               </div>
-
+              
               {/* View Toggle Icons */}
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded transition-colors ${viewMode === 'list'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                  className={`p-2 rounded transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
                   title="List View"
                 >
                   <List className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => setViewMode('kanban')}
-                  className={`p-2 rounded transition-colors ${viewMode === 'kanban'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                  className={`p-2 rounded transition-colors ${
+                    viewMode === 'kanban'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
                   title="Kanban View"
                 >
                   <LayoutGrid className="w-5 h-5" />
@@ -773,43 +811,43 @@ export default function ReceiptsPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredReceipts.length === 0 ? (
+                    {filteredDeliveries.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                          No receipts found
+                          No deliveries found
                         </td>
                       </tr>
                     ) : (
-                      filteredReceipts.map((receipt) => (
+                      filteredDeliveries.map((delivery) => (
                         <tr 
-                          key={receipt.id} 
-                          onClick={() => setSelectedReceiptId(receipt.id)}
+                          key={delivery.id} 
+                          onClick={() => setSelectedDeliveryId(delivery.id)}
                           onDoubleClick={() => {
-                            setSelectedReceiptId(receipt.id);
+                            setSelectedDeliveryId(delivery.id);
                             setIsDetailModalOpen(true);
                           }}
                           className={`hover:bg-gray-50 transition-colors cursor-pointer ${
-                            selectedReceiptId === receipt.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                            selectedDeliveryId === delivery.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
                           }`}
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{receipt.reference}</div>
+                            <div className="text-sm font-medium text-gray-900">{delivery.reference}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-700">{receipt.from}</div>
+                            <div className="text-sm text-gray-700">{delivery.from}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-700">{receipt.to}</div>
+                            <div className="text-sm text-gray-700">{delivery.to}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-700">{receipt.contact}</div>
+                            <div className="text-sm text-gray-700">{delivery.contact}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">{receipt.scheduleDate || '-'}</div>
+                            <div className="text-sm text-gray-500">{delivery.scheduleDate || '-'}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(receipt.status)}`}>
-                              {receipt.status}
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(delivery.status)}`}>
+                              {delivery.status}
                             </span>
                           </td>
                         </tr>
@@ -823,39 +861,40 @@ export default function ReceiptsPage() {
 
           {/* Kanban View */}
           {viewMode === 'kanban' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {Object.entries(groupedByStatus).map(([status, receipts]) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Object.entries(groupedByStatus).map(([status, deliveries]) => (
                 <div
                   key={status}
                   className="bg-white rounded-lg border border-gray-200 p-4"
                   onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, status as Receipt['status'])}
+                  onDrop={(e) => handleDrop(e, status as Delivery['status'])}
                 >
                   <div className="mb-4">
                     <h3 className="text-sm font-semibold text-gray-700 mb-1">{status}</h3>
-                    <span className="text-xs text-gray-500">{receipts.length} items</span>
+                    <span className="text-xs text-gray-500">{deliveries.length} items</span>
                   </div>
                   <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
-                    {receipts.map((receipt) => (
+                    {deliveries.map((delivery) => (
                       <div
-                        key={receipt.id}
+                        key={delivery.id}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, receipt.id)}
-                        className={`bg-gray-50 rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow cursor-move ${draggedReceiptId === receipt.id ? 'opacity-50' : ''
-                          }`}
+                        onDragStart={(e) => handleDragStart(e, delivery.id)}
+                        className={`bg-gray-50 rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow cursor-move ${
+                          draggedDeliveryId === delivery.id ? 'opacity-50' : ''
+                        }`}
                       >
-                        <div className="text-xs font-medium text-gray-900 mb-1">{receipt.reference}</div>
-                        <div className="text-xs text-gray-600 mb-2">{receipt.contact}</div>
+                        <div className="text-xs font-medium text-gray-900 mb-1">{delivery.reference}</div>
+                        <div className="text-xs text-gray-600 mb-2">{delivery.contact}</div>
                         <div className="text-xs text-gray-500">
-                          <div>From: {receipt.from}</div>
-                          <div>To: {receipt.to}</div>
-                          {receipt.scheduleDate && (
-                            <div className="mt-1">Date: {receipt.scheduleDate}</div>
+                          <div>From: {delivery.from}</div>
+                          <div>To: {delivery.to}</div>
+                          {delivery.scheduleDate && (
+                            <div className="mt-1">Date: {delivery.scheduleDate}</div>
                           )}
                         </div>
                       </div>
                     ))}
-                    {receipts.length === 0 && (
+                    {deliveries.length === 0 && (
                       <div className="text-xs text-gray-400 text-center py-4 border-2 border-dashed border-gray-300 rounded-lg p-4">
                         Drop here
                       </div>
@@ -866,12 +905,12 @@ export default function ReceiptsPage() {
             </div>
           )}
 
-          {/* Add Receipt Modal */}
+          {/* Add Delivery Modal */}
           {isModalOpen && (
             <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto z-50">
                 <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-gray-900">Add New Receipt</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">Add New Delivery</h2>
                   <button
                     onClick={() => setIsModalOpen(false)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -883,13 +922,13 @@ export default function ReceiptsPage() {
                 <div className="p-6 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      From <span className="text-red-500">*</span>
+                      From (Warehouse) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={newReceipt.from}
-                      onChange={(e) => setNewReceipt({ ...newReceipt, from: e.target.value })}
-                      placeholder="Enter source (e.g., vendor)"
+                      value={newDelivery.from}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, from: e.target.value })}
+                      placeholder="Enter source warehouse (e.g., WH/Stock1)"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                       required
                     />
@@ -897,13 +936,13 @@ export default function ReceiptsPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      To (Warehouse Location) <span className="text-red-500">*</span>
+                      To <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={newReceipt.to}
-                      onChange={(e) => setNewReceipt({ ...newReceipt, to: e.target.value })}
-                      placeholder="Enter destination (e.g., WH/Stock1)"
+                      value={newDelivery.to}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, to: e.target.value })}
+                      placeholder="Enter destination (e.g., vendor, customer)"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                       required
                     />
@@ -915,11 +954,24 @@ export default function ReceiptsPage() {
                     </label>
                     <input
                       type="text"
-                      value={newReceipt.contact}
-                      onChange={(e) => setNewReceipt({ ...newReceipt, contact: e.target.value })}
+                      value={newDelivery.contact}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, contact: e.target.value })}
                       placeholder="Enter contact name"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Delivery Address
+                    </label>
+                    <input
+                      type="text"
+                      value={newDelivery.deliveryAddress}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, deliveryAddress: e.target.value })}
+                      placeholder="Enter delivery address"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                     />
                   </div>
 
@@ -929,10 +981,26 @@ export default function ReceiptsPage() {
                     </label>
                     <input
                       type="date"
-                      value={newReceipt.scheduleDate}
-                      onChange={(e) => setNewReceipt({ ...newReceipt, scheduleDate: e.target.value })}
+                      value={newDelivery.scheduleDate}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, scheduleDate: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Operation Type
+                    </label>
+                    <select
+                      value={newDelivery.operationType}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, operationType: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    >
+                      <option value="">Select operation type</option>
+                      {operationTypes.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -940,8 +1008,8 @@ export default function ReceiptsPage() {
                       Status <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={newReceipt.status}
-                      onChange={(e) => setNewReceipt({ ...newReceipt, status: e.target.value as Receipt['status'] })}
+                      value={newDelivery.status}
+                      onChange={(e) => setNewDelivery({ ...newDelivery, status: e.target.value as Delivery['status'] })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                     >
                       {statusOptions.map((status) => (
@@ -952,10 +1020,10 @@ export default function ReceiptsPage() {
 
                   <div className="flex items-center gap-3 pt-4">
                     <button
-                      onClick={handleAddReceipt}
+                      onClick={handleAddDelivery}
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                     >
-                      Add Receipt
+                      Add Delivery
                     </button>
                     <button
                       onClick={() => setIsModalOpen(false)}
@@ -969,21 +1037,23 @@ export default function ReceiptsPage() {
             </div>
           )}
 
-          {/* Receipt Detail Modal */}
-          {isDetailModalOpen && selectedReceipt && (
+          {/* Delivery Detail Modal */}
+          {isDetailModalOpen && selectedDelivery && (
             <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto z-50">
                 {/* Header */}
                 <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-gray-900">Receipt</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">Delivery</h2>
                   <div className="flex items-center gap-3">
                     {/* Status Workflow Indicator */}
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className={selectedReceipt.status === 'Draft' ? 'font-semibold text-blue-600' : ''}>Draft</span>
+                      <span className={selectedDelivery.status === 'Draft' ? 'font-semibold text-blue-600' : ''}>Draft</span>
                       <span className="text-gray-400">›</span>
-                      <span className={selectedReceipt.status === 'Ready' ? 'font-semibold text-blue-600' : ''}>Ready</span>
+                      <span className={selectedDelivery.status === 'Waiting' ? 'font-semibold text-blue-600' : ''}>Waiting</span>
                       <span className="text-gray-400">›</span>
-                      <span className={selectedReceipt.status === 'Done' ? 'font-semibold text-blue-600' : ''}>Done</span>
+                      <span className={selectedDelivery.status === 'Ready' ? 'font-semibold text-blue-600' : ''}>Ready</span>
+                      <span className="text-gray-400">›</span>
+                      <span className={selectedDelivery.status === 'Done' ? 'font-semibold text-blue-600' : ''}>Done</span>
                     </div>
                     <button
                       onClick={() => setIsDetailModalOpen(false)}
@@ -1004,16 +1074,7 @@ export default function ReceiptsPage() {
                       <Plus className="w-4 h-4" />
                       New
                     </button>
-                    {selectedReceipt.status === 'Draft' && (
-                      <button
-                        onClick={handleToDo}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        To DO
-                      </button>
-                    )}
-                    {selectedReceipt.status === 'Ready' && (
+                    {selectedDelivery.status === 'Ready' && (
                       <button
                         onClick={handleValidate}
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -1022,7 +1083,7 @@ export default function ReceiptsPage() {
                         Validate
                       </button>
                     )}
-                    {selectedReceipt.status === 'Done' && (
+                    {selectedDelivery.status === 'Done' && (
                       <button
                         onClick={handlePrint}
                         className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -1039,55 +1100,81 @@ export default function ReceiptsPage() {
                     </button>
                   </div>
 
-                  {/* Receipt Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Reference</label>
-                      <div className="text-lg font-semibold text-gray-900">{selectedReceipt.reference}</div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Receive From</label>
-                      <input
-                        type="text"
-                        value={selectedReceipt.from}
-                        onChange={(e) => {
-                          setReceiptsData(prevReceipts =>
-                            prevReceipts.map(receipt =>
-                              receipt.id === selectedReceiptId
-                                ? { ...receipt, from: e.target.value }
-                                : receipt
-                            )
-                          );
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Date</label>
-                      <input
-                        type="date"
-                        value={selectedReceipt.scheduleDate || ''}
-                        onChange={(e) => {
-                          setReceiptsData(prevReceipts =>
-                            prevReceipts.map(receipt =>
-                              receipt.id === selectedReceiptId
-                                ? { ...receipt, scheduleDate: e.target.value || null }
-                                : receipt
-                            )
-                          );
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Responsible</label>
-                      <input
-                        type="text"
-                        value={selectedReceipt.responsible || 'Current User'}
-                        readOnly
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Auto-filled with current logged in user</p>
+                  {/* Delivery Information */}
+                  <div>
+                    <div className="text-lg font-semibold text-gray-900 mb-4">{selectedDelivery.reference}</div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Address</label>
+                        <input
+                          type="text"
+                          value={selectedDelivery.deliveryAddress || ''}
+                          onChange={(e) => {
+                            setDeliveriesData(prevDeliveries =>
+                              prevDeliveries.map(delivery =>
+                                delivery.id === selectedDeliveryId
+                                  ? { ...delivery, deliveryAddress: e.target.value }
+                                  : delivery
+                              )
+                            );
+                          }}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Responsible</label>
+                        <input
+                          type="text"
+                          value={selectedDelivery.responsible || 'Current User'}
+                          readOnly
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Auto-filled with current logged in user</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Date</label>
+                        <input
+                          type="date"
+                          value={selectedDelivery.scheduleDate || ''}
+                          onChange={(e) => {
+                            setDeliveriesData(prevDeliveries =>
+                              prevDeliveries.map(delivery =>
+                                delivery.id === selectedDeliveryId
+                                  ? { ...delivery, scheduleDate: e.target.value || null }
+                                  : delivery
+                              )
+                            );
+                          }}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Operation type</label>
+                        <div className="relative">
+                          <select
+                            value={selectedDelivery.operationType || ''}
+                            onChange={(e) => {
+                              setDeliveriesData(prevDeliveries =>
+                                prevDeliveries.map(delivery =>
+                                  delivery.id === selectedDeliveryId
+                                    ? { ...delivery, operationType: e.target.value }
+                                    : delivery
+                                )
+                              );
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 appearance-none pr-8"
+                          >
+                            <option value="">Select operation type</option>
+                            {operationTypes.map((type) => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                            <ArrowDown className="w-4 h-4 text-gray-400" />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1105,16 +1192,26 @@ export default function ReceiptsPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {selectedReceipt.products && selectedReceipt.products.length > 0 ? (
-                            selectedReceipt.products.map((product) => (
-                              <tr key={product.id}>
+                          {selectedDelivery.products && selectedDelivery.products.length > 0 ? (
+                            selectedDelivery.products.map((product) => (
+                              <tr 
+                                key={product.id}
+                                className={product.inStock === false ? 'bg-red-50 border-l-4 border-red-500' : ''}
+                              >
                                 <td className="px-4 py-3">
-                                  <div className="text-sm text-gray-900">
-                                    <span className="font-medium">[{product.productCode}]</span> {product.productName}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-sm text-gray-900">
+                                      <span className="font-medium">[{product.productCode}]</span> {product.productName}
+                                    </div>
+                                    {product.inStock === false && (
+                                      <AlertCircle className="w-4 h-4 text-red-500" title="Product not in stock" />
+                                    )}
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <div className="text-sm text-gray-700">{product.quantity}</div>
+                                  <div className={`text-sm ${product.inStock === false ? 'text-red-700 font-semibold' : 'text-gray-700'}`}>
+                                    {product.quantity}
+                                  </div>
                                 </td>
                               </tr>
                             ))
@@ -1164,6 +1261,9 @@ export default function ReceiptsPage() {
                           </button>
                         </div>
                       </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Note: Products not in stock will be marked in red with an alert icon
+                      </p>
                     </div>
                   </div>
                 </div>

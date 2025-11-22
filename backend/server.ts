@@ -3,6 +3,19 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.js";
+import { Pool } from "@neondatabase/serverless";
+import bcrypt from "bcryptjs";
+// Import routes
+import receiptRoutes from "./routes/receiptRoutes.js";
+import deliveryRoutes from "./routes/deliveryRoutes.js";
+import moveHistoryRoutes from "./routes/moveHistoryRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import stockRoutes from "./routes/stockRoutes.js";
+import warehouseRoutes from "./routes/warehouseRoutes.js";
+
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 
 const app = express();
 
@@ -26,12 +39,14 @@ app.use(express.json({
 }));
 app.use(cookieParser());
 
+// Allow cookies from frontend
 app.use(
   cors({
     origin: "http://localhost:3000",
     credentials: true,
   }),
 );
+
 
 app.use("/auth", authRoutes);
 
@@ -51,6 +66,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 console.log("Attempting to start server...");
 const server = app.listen(5000, () => console.log("Backend running on 5000"));
 
-server.on("error", (err) => {
-  console.error("Failed to start server:", err);
-});
+
+app.use("/api/receipts", receiptRoutes);
+app.use("/api/deliveries", deliveryRoutes);
+app.use("/api/move-history", moveHistoryRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/stock", stockRoutes);
+app.use("/api", warehouseRoutes);
