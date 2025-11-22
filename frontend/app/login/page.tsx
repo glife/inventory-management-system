@@ -5,10 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 async function login(loginId: string, password: string): Promise<LoginResponse> {
-  // Mock response for UI preview
+  // Mock response for UI preview - allows access for testing
   return new Promise<LoginResponse>((resolve) => {
     setTimeout(() => {
-      resolve({ error: "Backend not connected. This is a UI preview." });
+      // For UI testing, allow any login with valid credentials
+      if (loginId.length >= 3 && password.length >= 3) {
+        // Save mock user to localStorage for authentication
+        const mockUser = {
+          id: "1",
+          email: loginId.includes("@") ? loginId : `${loginId}@example.com`,
+          name: loginId,
+        };
+        if (typeof window !== "undefined") {
+          localStorage.setItem("user", JSON.stringify(mockUser));
+        }
+        resolve({}); // Success - no error
+      } else {
+        resolve({ error: "Backend not connected. This is a UI preview." });
+      }
     }, 500);
   });
 }
@@ -78,8 +92,8 @@ export default function LoginPage() {
     if (result?.error) {
       setError(result.error);
     } else {
-      // On success, navigate to home
-      router.push("/");
+      // On success, navigate to dashboard
+      router.push("/dashboard");
     }
   } catch {
     setError("Invalid login ID or password");
