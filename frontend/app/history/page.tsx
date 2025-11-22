@@ -2,213 +2,310 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Bell, HelpCircle, Settings, User, Package, Warehouse, FileText, Activity, BarChart3, Box, Clock, List, LayoutGrid, Plus, Truck, LogOut, ArrowRight, ArrowLeft, Filter } from 'lucide-react';
+import { Search, Bell, HelpCircle, Settings, User, LogOut } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { isAuthenticated, logout, getUser } from '@/lib/auth';
+import MoveHistoryHeader from './components/MoveHistoryHeader';
+import MoveHistoryTable from './components/MoveHistoryTable';
+import MoveHistoryKanban from './components/MoveHistoryKanban';
+import type { MoveHistoryItem } from './types';
 
-// Type Definitions
-interface MoveHistoryItem {
-    id: string;
-    reference: string;
-    product: string;
-    sku: string;
-    from: string;
-    to: string;
-    quantity: number;
-    date: string;
-    user: string;
-    type: 'receipt' | 'delivery' | 'transfer' | 'adjustment';
+// Mock data for receipts and deliveries (in real app, this would come from API)
+const mockReceipts = [
+  {
+    id: '1',
+    reference: 'WH/IN/0001',
+    from: 'Vendor A',
+    to: 'WH/Stock1',
+    contact: 'Azure Interior',
+    scheduleDate: '2024-01-22',
+    status: 'Done',
+    responsible: 'John Smith',
+    products: [
+      { id: '1', productCode: 'DESK001', productName: 'Desk', quantity: 6 },
+      { id: '2', productCode: 'CHAIR001', productName: 'Chair', quantity: 12 },
+      { id: '3', productCode: 'CAB001', productName: 'Cabinet', quantity: 3 }
+    ]
+  },
+  {
+    id: '2',
+    reference: 'WH/IN/0002',
+    from: 'Vendor B',
+    to: 'WH/Stock2',
+    contact: 'Tech Solutions',
+    scheduleDate: '2024-01-21',
+    status: 'Done',
+    responsible: 'Jane Smith',
+    products: [
+      { id: '4', productCode: 'TABLE001', productName: 'Table', quantity: 8 }
+    ]
+  },
+  {
+    id: '3',
+    reference: 'WH/IN/0003',
+    from: 'Vendor C',
+    to: 'WH/Stock1',
+    contact: 'Global Supplies',
+    scheduleDate: '2024-01-20',
+    status: 'Done',
+    responsible: 'Mike Johnson',
+    products: [
+      { id: '5', productCode: 'SHELF001', productName: 'Shelf', quantity: 15 },
+      { id: '6', productCode: 'LAMP001', productName: 'Lamp', quantity: 20 }
+    ]
+  }
+];
+
+const mockDeliveries = [
+  {
+    id: '1',
+    reference: 'WH/OUT/0001',
+    from: 'WH/Stock1',
+    to: 'Customer A',
+    contact: 'Azure Interior',
+    scheduleDate: '2024-01-22',
+    status: 'Done',
+    responsible: 'Sarah Lee',
+    products: [
+      { id: '1', productCode: 'DESK001', productName: 'Desk', quantity: 4 },
+      { id: '2', productCode: 'CHAIR001', productName: 'Chair', quantity: 8 }
+    ]
+  },
+  {
+    id: '2',
+    reference: 'WH/OUT/0002',
+    from: 'WH/Stock2',
+    to: 'Customer B',
+    contact: 'Tech Solutions',
+    scheduleDate: '2024-01-21',
+    status: 'Done',
+    responsible: 'David Miller',
+    products: [
+      { id: '3', productCode: 'CAB001', productName: 'Cabinet', quantity: 2 },
+      { id: '4', productCode: 'TABLE001', productName: 'Table', quantity: 5 },
+      { id: '5', productCode: 'SHELF001', productName: 'Shelf', quantity: 10 }
+    ]
+  },
+  {
+    id: '3',
+    reference: 'WH/OUT/0003',
+    from: 'WH/Stock1',
+    to: 'Customer C',
+    contact: 'Global Supplies',
+    scheduleDate: '2024-01-20',
+    status: 'Done',
+    responsible: 'Emily Brown',
+    products: [
+      { id: '6', productCode: 'LAMP001', productName: 'Lamp', quantity: 12 }
+    ]
+  }
+];
+
+// Generate move history from receipts and deliveries
+function generateMoveHistory(): MoveHistoryItem[] {
+  const historyItems: MoveHistoryItem[] = [];
+  let itemId = 1;
+
+  // Process receipts (IN moves - green)
+  mockReceipts.forEach((receipt) => {
+    if (receipt.status === 'Done' && receipt.products && receipt.products.length > 0) {
+      receipt.products.forEach((product) => {
+        historyItems.push({
+          id: `receipt-${itemId++}`,
+          reference: receipt.reference,
+          product: product.productName,
+          productCode: product.productCode,
+          sku: product.productCode,
+          from: receipt.from,
+          to: receipt.to,
+          quantity: product.quantity,
+          date: receipt.scheduleDate ? `${receipt.scheduleDate} 14:30` : new Date().toISOString().split('T')[0] + ' 14:30',
+          user: receipt.responsible || 'System',
+          type: 'receipt',
+          direction: 'in'
+        });
+      });
+    }
+  });
+
+  // Process deliveries (OUT moves - red)
+  mockDeliveries.forEach((delivery) => {
+    if (delivery.status === 'Done' && delivery.products && delivery.products.length > 0) {
+      delivery.products.forEach((product) => {
+        historyItems.push({
+          id: `delivery-${itemId++}`,
+          reference: delivery.reference,
+          product: product.productName,
+          productCode: product.productCode,
+          sku: product.productCode,
+          from: delivery.from,
+          to: delivery.to,
+          quantity: product.quantity,
+          date: delivery.scheduleDate ? `${delivery.scheduleDate} 11:15` : new Date().toISOString().split('T')[0] + ' 11:15',
+          user: delivery.responsible || 'System',
+          type: 'delivery',
+          direction: 'out'
+        });
+      });
+    }
+  });
+
+  // Add some transfer and adjustment examples
+  historyItems.push(
+    {
+      id: `transfer-${itemId++}`,
+      reference: 'WH/INT/0001',
+      product: 'Copper Wire Roll',
+      productCode: 'WIRE001',
+      sku: 'SKU-9273',
+      from: 'WH/Stock/A2',
+      to: 'WH/Stock/B1',
+      quantity: 20,
+      date: '2024-01-21 16:45',
+      user: 'Mike Johnson',
+      type: 'transfer',
+      direction: 'in'
+    },
+    {
+      id: `adjustment-${itemId++}`,
+      reference: 'WH/ADJ/0001',
+      product: 'Valve Assembly',
+      productCode: 'VALVE001',
+      sku: 'SKU-7234',
+      from: 'WH/Stock/B1',
+      to: 'Virtual Loss',
+      quantity: 2,
+      date: '2024-01-21 09:20',
+      user: 'Admin',
+      type: 'adjustment',
+      direction: 'out'
+    }
+  );
+
+  // Sort by date (newest first)
+  return historyItems.sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return dateB - dateA;
+  });
 }
 
 export default function HistoryPage() {
-    const router = useRouter();
-    const [activeNav, setActiveNav] = useState<string>('history');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [historyData, setHistoryData] = useState<MoveHistoryItem[]>([]);
 
-    // Check authentication on mount
-    useEffect(() => {
-        if (!isAuthenticated()) {
-            router.push('/login');
-        } else {
-            const userData = getUser();
-            setUser(userData);
-            setLoading(false);
-        }
-    }, [router]);
-
-    // Dummy data for history
-    const historyData: MoveHistoryItem[] = [
-        { id: '1', reference: 'WH/IN/0001', product: 'Industrial Bearing XL', sku: 'SKU-4892', from: 'Vendor', to: 'WH/Stock/A1', quantity: 50, date: '2024-01-22 14:30', user: 'John Smith', type: 'receipt' },
-        { id: '2', reference: 'WH/OUT/0001', product: 'Steel Bolt M12', sku: 'SKU-2341', from: 'WH/Stock/B2', to: 'Customer A', quantity: 200, date: '2024-01-22 11:15', user: 'Sarah Lee', type: 'delivery' },
-        { id: '3', reference: 'WH/INT/0001', product: 'Copper Wire Roll', sku: 'SKU-9273', from: 'WH/Stock/A2', to: 'WH/Stock/B1', quantity: 20, date: '2024-01-21 16:45', user: 'Mike Johnson', type: 'transfer' },
-        { id: '4', reference: 'WH/ADJ/0001', product: 'Valve Assembly', sku: 'SKU-7234', from: 'WH/Stock/B1', to: 'Virtual Loss', quantity: 2, date: '2024-01-21 09:20', user: 'Admin', type: 'adjustment' },
-        { id: '5', reference: 'WH/IN/0002', product: 'Gasket Pack', sku: 'SKU-3498', from: 'Vendor', to: 'WH/Stock/C1', quantity: 100, date: '2024-01-20 15:10', user: 'John Smith', type: 'receipt' },
-    ];
-
-    // Filter history based on search query
-    const filteredHistory = historyData.filter(item => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
-        return (
-            item.reference.toLowerCase().includes(query) ||
-            item.product.toLowerCase().includes(query) ||
-            item.sku.toLowerCase().includes(query) ||
-            item.user.toLowerCase().includes(query)
-        );
-    });
-
-    const getTypeColor = (type: string) => {
-        switch (type) {
-            case 'receipt': return 'bg-green-100 text-green-800';
-            case 'delivery': return 'bg-blue-100 text-blue-800';
-            case 'transfer': return 'bg-purple-100 text-purple-800';
-            case 'adjustment': return 'bg-orange-100 text-orange-800';
-            default: return 'bg-gray-100 text-gray-800';
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <h1 className="text-xl font-semibold text-gray-700">Loading...</h1>
-                </div>
-            </div>
-        );
+  // Check authentication on mount
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+    } else {
+      const userData = getUser();
+      setUser(userData);
+      setHistoryData(generateMoveHistory());
+      setLoading(false);
     }
+  }, [router]);
 
+  // Filter history based on search query
+  const filteredHistory = historyData.filter(item => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
     return (
-        <div className="flex h-screen bg-gray-50">
-            {/* Sidebar */}
-            {/* Sidebar */}
-            <Sidebar active="history" />
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Top Navigation */}
-                <header className="bg-white border-b border-gray-200 px-6 py-3">
-                    <div className="flex items-center justify-end">
-                        <div className="flex items-center gap-3">
-                            <button className="p-2 hover:bg-gray-100 rounded-lg relative">
-                                <Bell className="w-5 h-5 text-gray-600" />
-                                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                            </button>
-                            <button className="p-2 hover:bg-gray-100 rounded-lg">
-                                <HelpCircle className="w-5 h-5 text-gray-600" />
-                            </button>
-                            <button className="p-2 hover:bg-gray-100 rounded-lg">
-                                <Settings className="w-5 h-5 text-gray-600" />
-                            </button>
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                    <User className="w-5 h-5 text-white" />
-                                </div>
-                                {user && (
-                                    <div className="hidden md:block text-sm">
-                                        <div className="font-medium text-gray-900">{user.name}</div>
-                                        <div className="text-xs text-gray-500">{user.email}</div>
-                                    </div>
-                                )}
-                            </div>
-                            <button
-                                onClick={logout}
-                                className="flex items-center gap-2 p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
-                                title="Logout"
-                            >
-                                <LogOut className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                </header>
-
-                {/* History Content */}
-                <main className="flex-1 overflow-y-auto p-6">
-                    {/* Header */}
-                    <div className="mb-6 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <h1 className="text-2xl font-bold text-gray-900">Stock Moves History</h1>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search history..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-100 text-gray-900"
-                                />
-                            </div>
-                            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">
-                                <Filter className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* History Table */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Reference</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Product</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">From</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">To</th>
-                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Quantity</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredHistory.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                                                No history found
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        filteredHistory.map((item) => (
-                                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-500">{item.date}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">{item.reference}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div>
-                                                        <div className="text-sm text-gray-900">{item.product}</div>
-                                                        <div className="text-xs text-gray-500">{item.sku}</div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-700">{item.from}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-700">{item.to}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                    <div className="text-sm font-medium text-gray-900">{item.quantity}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeColor(item.type)}`}>
-                                                        {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </main>
-            </div>
-        </div>
+      item.reference.toLowerCase().includes(query) ||
+      item.product.toLowerCase().includes(query) ||
+      item.sku.toLowerCase().includes(query) ||
+      item.productCode.toLowerCase().includes(query) ||
+      item.user.toLowerCase().includes(query) ||
+      item.from.toLowerCase().includes(query) ||
+      item.to.toLowerCase().includes(query)
     );
+  });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h1 className="text-xl font-semibold text-gray-700">Loading...</h1>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar active="history" />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Navigation */}
+        <header className="bg-white border-b border-gray-200 h-16">
+          <div className="flex items-center justify-between px-6 h-full">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search for SKUs, products, documents..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 ml-6">
+              <button className="p-2 hover:bg-gray-100 rounded-lg relative">
+                <Bell className="w-5 h-5 text-gray-600" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg">
+                <HelpCircle className="w-5 h-5 text-gray-600" />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg">
+                <Settings className="w-5 h-5 text-gray-600" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                {user && (
+                  <div className="hidden md:block text-sm">
+                    <div className="font-medium text-gray-900">{user.name}</div>
+                    <div className="text-xs text-gray-500">{user.email}</div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={logout}
+                className="flex items-center gap-2 p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* History Content */}
+        <main className="flex-1 overflow-y-auto p-6">
+          <MoveHistoryHeader
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+
+          {viewMode === 'list' && (
+            <MoveHistoryTable items={filteredHistory} />
+          )}
+
+          {viewMode === 'kanban' && (
+            <MoveHistoryKanban items={filteredHistory} />
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }
